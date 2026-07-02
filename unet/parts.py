@@ -16,8 +16,12 @@ class DoubleConv(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
+        kernel_size1: int = 3,
         dilation1: int = 1,
+        padding1: int = 1,
+        kernel_size2: int = 3,
         dilation2: int = 1,
+        padding2: int = 1,
         mid_channels: int | None = None,
     ) -> None:
         """Initialize the double convolution block.
@@ -25,8 +29,9 @@ class DoubleConv(nn.Module):
         Args:
             in_channels: Number of channels in the input tensor.
             out_channels: Number of channels produced by the block.
-            dilation1: Dilation rate for the first convolution.
-            dilation2: Dilation rate for the second convolution.
+            kernel_sizeN: kernel size for convolution 1 or 2.
+            paddingN: padding for convolution 1 or 2.
+            dilationN: Dilation rate for convolution 1 or 2.
             mid_channels: Number of channels between the two convolutions.
                 Defaults to `out_channels` when not given.
         """
@@ -37,8 +42,8 @@ class DoubleConv(nn.Module):
             nn.Conv2d(
                 in_channels,
                 mid_channels,
-                kernel_size=3,
-                padding=1,
+                kernel_size=kernel_size1,
+                padding=padding1,
                 dilation=dilation1,
                 bias=False,
             ),
@@ -47,8 +52,8 @@ class DoubleConv(nn.Module):
             nn.Conv2d(
                 mid_channels,
                 out_channels,
-                kernel_size=3,
-                padding=1,
+                kernel_size=kernel_size2,
+                padding=padding2,
                 dilation=dilation2,
                 bias=False,
             ),
