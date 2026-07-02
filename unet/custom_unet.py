@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
-from .parts import DoubleConv, Down, Up, OutConv
+from .unet_parts import DoubleConv, Down, Up, OutConv
 
 
-class UNet(nn.Module):
+class CustomUNet(nn.Module):
     """Encoder-decoder segmentation network with skip connections."""
 
     def __init__(self, n_channels: int, n_classes: int, trilinear: bool = False) -> None:

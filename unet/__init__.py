@@ -1,1 +1,1 @@
-from .model import UNet
+from .custom_unet import CustomUNet
