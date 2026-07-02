@@ -10,41 +10,50 @@ from .parts import DoubleConv, Down, Up, OutConv
 class UNet(nn.Module):
     """Encoder-decoder segmentation network with skip connections."""
 
-    def __init__(self, n_channels: int, n_classes: int, bilinear: bool = False) -> None:
+    def __init__(self, n_channels: int, n_classes: int, trilinear: bool = False) -> None:
         """Initialize the U-Net.
 
         Args:
             n_channels: Number of channels in the input image.
             n_classes: Number of output classes/channels.
-            bilinear: If True, use bilinear upsampling in the decoder.
+            trilinear: If True, use trilinear upsampling in the decoder.
                 If False, use learned transposed convolutions.
         """
         super().__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
-        self.bilinear = bilinear
+        self.trilinear = trilinear
 
-        # PSF is about 12-16 px in width, so 4 2x downsamples is about right to create one hot pixel
-        self.inc = DoubleConv(n_channels, 8)
+        # PSF is about 12-16 px in width, so 4 2x downsamples 
+        # is about right to create one hot pixel
+        self.inc = DoubleConv(
+            n_channels,
+            8,
+            kernel_size_1=5, # larger kernel + dilation to learn/detect large features
+            dilation_1=2,
+            padding_1=4,
+            kernel_size_2=5, # footprint shrinks to 5 with no dilation
+            padding_2=2,
+        )
         self.down1 = Down(8, 16)
         self.down2 = Down(16, 32)
         self.down3 = Down(32, 64)
-        factor = 2 if bilinear else 1
+        factor = 2 if trilinear else 1
         self.down4 = Down(64, 128 // factor)
-        self.up1 = Up(128, 64 // factor, bilinear)
-        self.up2 = Up(64, 32 // factor, bilinear)
-        self.up3 = Up(32, 16 // factor, bilinear)
-        self.up4 = Up(16, 8, bilinear)
+        self.up1 = Up(128, 64 // factor, trilinear)
+        self.up2 = Up(64, 32 // factor, trilinear)
+        self.up3 = Up(32, 16 // factor, trilinear)
+        self.up4 = Up(16, 8, trilinear)
         self.outc = OutConv(8, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the encoder-decoder forward pass.
 
         Args:
-            x: Input tensor of shape (N, n_channels, H, W).
+            x: Input tensor of shape (N, n_channels, T, H, W).
 
         Returns:
-            Per-class logits of shape (N, n_classes, H, W).
+            Per-class logits of shape (N, n_classes, T, H, W).
         """
         x1 = self.inc(x)
         x2 = self.down1(x1)
