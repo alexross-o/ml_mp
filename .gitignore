@@ -1,9 +1,36 @@
-*.pyc
-data/
+# Python bytecode and caches
 __pycache__/
-checkpoints/
-*.pth
-*.jpg
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
 venv/
+env/
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# IDE/editor
+.vscode/
 .idea/
-wandb/
+.claude/
+.conda/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data directory
+data/
