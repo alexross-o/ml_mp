@@ -62,27 +62,38 @@ class Conv2Plus1D(nn.Module):
             temporal_dilation: Dilation rate of the temporal convolution.
             spatial_padding: Padding of the spatial convolution.
             temporal_padding: Padding of the temporal convolution.
-            bias: Whether the spatial and temporal convolutions learn a bias
-                term. Typically False when followed by a normalization layer.
+            bias: Whether the temporal convolution learns a bias term.
+                Typically False when followed by a normalization layer.
         """
         super().__init__()
-        mid_channels = int(
-            (temporal_kernel_size * spatial_kernel_size**2 * in_channels * out_channels)
-            / (
-                spatial_kernel_size**2 * in_channels
-                + temporal_kernel_size * out_channels
-            )
+        # Floored at 1: for small out_channels (e.g. single-channel heads) the
+        # parameter-matching formula can round down to 0, which would build a
+        # zero-channel spatial conv.
+        mid_channels = max(
+            1,
+            int(
+                (
+                    temporal_kernel_size
+                    * spatial_kernel_size**2
+                    * in_channels
+                    * out_channels
+                )
+                / (
+                    spatial_kernel_size**2 * in_channels
+                    + temporal_kernel_size * out_channels
+                )
+            ),
         )
 
-        spatial_conv = nn.Conv3d(
+        self.spatial_conv = nn.Conv3d(
             in_channels,
             mid_channels,
             kernel_size=(1, spatial_kernel_size, spatial_kernel_size),
             padding=(0, spatial_padding, spatial_padding),
             dilation=(1, spatial_dilation, spatial_dilation),
-            bias=bias,
+            bias=False,  # immediately followed by a normalization
         )
-        temporal_conv = nn.Conv3d(
+        self.temporal_conv = nn.Conv3d(
             mid_channels,
             out_channels,
             kernel_size=(temporal_kernel_size, 1, 1),
@@ -92,12 +103,12 @@ class Conv2Plus1D(nn.Module):
         )
 
         self.conv2plus1d = nn.Sequential(
-            spatial_conv,
+            self.spatial_conv,
             nn.GroupNorm(
                 num_groups=_group_norm_groups(mid_channels), num_channels=mid_channels
             ),
             nn.ReLU(inplace=True),
-            temporal_conv,
+            self.temporal_conv,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
