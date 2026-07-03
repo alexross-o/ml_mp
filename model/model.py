@@ -60,6 +60,7 @@ class EventDetector(nn.Module):
             bias=True,
         )
 
+        # TODO: adjust to real class frequencies once data is simulated
         # # per-class bias init — don't assume black lobe, white lobe, and dipole
         # # occur at the same rate. Set pi per channel from your simulator's actual
         # # class frequencies rather than broadcasting one scalar to all 3.
