@@ -50,6 +50,7 @@ class Conv2Plus1D(nn.Module):
         spatial_padding: int = 1,
         temporal_padding: int = 1,
         bias: bool = False,
+        mid_channels: int | None = None
     ) -> None:
         """Initialize the (2+1)D convolution block.
 
@@ -66,24 +67,26 @@ class Conv2Plus1D(nn.Module):
                 Typically False when followed by a normalization layer.
         """
         super().__init__()
-        # Floored at 1: for small out_channels (e.g. single-channel heads) the
-        # parameter-matching formula can round down to 0, which would build a
-        # zero-channel spatial conv.
-        mid_channels = max(
-            1,
-            int(
-                (
-                    temporal_kernel_size
-                    * spatial_kernel_size**2
-                    * in_channels
-                    * out_channels
-                )
-                / (
-                    spatial_kernel_size**2 * in_channels
-                    + temporal_kernel_size * out_channels
-                )
-            ),
-        )
+
+        if mid_channels is None:
+            # Floored at 1: for small out_channels (e.g. single-channel heads) the
+            # parameter-matching formula can round down to 0, which would build a
+            # zero-channel spatial conv.
+            mid_channels = max(
+                1,
+                int(
+                    (
+                        temporal_kernel_size
+                        * spatial_kernel_size**2
+                        * in_channels
+                        * out_channels
+                    )
+                    / (
+                        spatial_kernel_size**2 * in_channels
+                        + temporal_kernel_size * out_channels
+                    )
+                ),
+            )
 
         self.spatial_conv = nn.Conv3d(
             in_channels,

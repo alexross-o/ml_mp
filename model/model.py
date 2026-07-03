@@ -33,6 +33,7 @@ class EventDetector(nn.Module):
         # 3 independent channels, one per class — sigmoid'd independently, not softmax
         self.heatmap_head = Conv2Plus1D(
             in_channels=feat_channels,
+            mid_channels=16,
             out_channels=3,
             temporal_kernel_size=1,
             temporal_padding=0,
@@ -42,6 +43,7 @@ class EventDetector(nn.Module):
         # shared across all 3 classes — sub-pixel centering doesn't depend on class
         self.offset_head = Conv2Plus1D(
             in_channels=feat_channels,
+            mid_channels=16,
             out_channels=2,  # dy, dx
             temporal_kernel_size=1,
             temporal_padding=0,
@@ -51,6 +53,7 @@ class EventDetector(nn.Module):
         # computed everywhere, but only ever supervised/read at dipole locations
         self.orientation_head = Conv2Plus1D(
             in_channels=feat_channels,
+            mid_channels=16,
             out_channels=2,  # cos, sin — L2-normalized to a unit vector in forward()
             temporal_kernel_size=1,
             temporal_padding=0,
