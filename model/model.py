@@ -26,9 +26,18 @@ class EventDetector(nn.Module):
                 channels of output.
             feat_channels: Number of channels in the backbone's output, i.e.
                 `backbone.n_classes`.
+
+        Raises:
+            ValueError: If `feat_channels` doesn't match `backbone.n_classes`.
         """
         super().__init__()
         self.backbone = backbone
+
+        if feat_channels != self.backbone.n_classes:
+            raise ValueError(
+                f"feat_channels ({feat_channels}) must match backbone.n_classes "
+                f"({self.backbone.n_classes})"
+            )
 
         # 3 independent channels, one per class — sigmoid'd independently, not softmax
         self.heatmap_head = Conv2Plus1D(
