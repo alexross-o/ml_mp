@@ -1,4 +1,4 @@
-from simulator.background import BUFFER_MOVIES, gen_random_mov_stack
+from simulator.background import BUFFER_MOVIES, VAL_BUFFER_MOVIES, gen_random_mov_stack
 from simulator.events import (
     AbstractSimEvent,
     BaseSimEvent,

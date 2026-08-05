@@ -8,3 +8,5 @@ HEATMAP_GAUSSIAN_THUMBNAIL_SIZE: int = 9  # px window the gaussian is truncated 
 RATIOMETRIC_RESCALE: float = 2000.0  # approximates dividing by the empirical ratiometric noise stdev (sigma_noise)
 OPTIMUM_EVENT_DENSITY: float = 0.5  # events / um^2 / s, the center of gen_data's default sampling range
 DEFAULT_NAVG: int = 5  # default ratiometric window size (see ratiometric.gen_ratiometric_movie)
+DEFAULT_MOV_THUMBNAIL_SIZE: int = 64  # px, training background window width & height
+VAL_MOV_THUMBNAIL_SIZE: int = 48  # px, validation background window width & height (smaller-FoV buffer movies)

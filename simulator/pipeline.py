@@ -79,13 +79,14 @@ event_generator = partial(
 def gen_data(
     batch_size: int,
     length: int = 500,
-    mov_thumbnail_size: int = 64,
+    mov_thumbnail_size: int | None = None,
     event_density_range: tuple[float, float] = (
         OPTIMUM_EVENT_DENSITY / 10,
         5 * OPTIMUM_EVENT_DENSITY,
     ),
     navg: int = DEFAULT_NAVG,
     ratiometric_rescale: float = RATIOMETRIC_RESCALE,
+    validation: bool = False,
     seed: int | np.random.Generator | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Generate a batch of training-ready ratiometric movies and ground truth.
@@ -104,21 +105,26 @@ def gen_data(
         batch_size: Number of samples to generate.
         length: Number of frames in each sampled background window.
         mov_thumbnail_size: Width and height, in px, of each sampled
-            background window.
+            background window. Defaults to `VAL_MOV_THUMBNAIL_SIZE` if
+            `validation`, else `DEFAULT_MOV_THUMBNAIL_SIZE` (see
+            `gen_random_mov_stack`).
         event_density_range: (low, high) event density, in events / um^2 /
             s, uniformly sampled per movie.
         navg: Ratiometric window size; also the number of frames excluded
             from event placement at each end of the movie (see `gen_events`).
         ratiometric_rescale: Scalar the ratiometric movie is multiplied by
             before batching (see `simulator.constants.RATIOMETRIC_RESCALE`).
+        validation: If True, draws background from `VAL_BUFFER_MOVIES` --
+            smaller-FoV buffer movies held out entirely from training --
+            instead of `BUFFER_MOVIES`, so this batch checks generalization
+            to background noise the model never trained on.
         seed: Seed (or an existing `np.random.Generator`, reused as-is) for
             all randomness in this call -- the same seed reproduces the same
             batch. Defaults to fresh, unseeded randomness if not given.
 
     Returns:
         A tuple of:
-            - Ratiometric movies, shape (batch_size, 1, T - 2*navg,
-              mov_thumbnail_size, mov_thumbnail_size).
+            - Ratiometric movies, shape (batch_size, 1, T - 2*navg, H, W).
             - Ground truth dict with keys "heatmap" (batch_size, 3,
               T - 2*navg, H, W), "offset" and "orientation" (batch_size, 2,
               T - 2*navg, H, W) -- matching `EventDetector.forward`'s
@@ -134,7 +140,10 @@ def gen_data(
     for _ in range(batch_size):
         event_density = rng.uniform(*event_density_range)
         mov_stack = gen_random_mov_stack(
-            length=length, mov_thumbnail_size=mov_thumbnail_size, rng=rng
+            length=length,
+            mov_thumbnail_size=mov_thumbnail_size,
+            validation=validation,
+            rng=rng,
         )
 
         events = event_generator(
