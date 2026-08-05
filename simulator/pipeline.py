@@ -8,7 +8,7 @@ from alex_area import utils
 from alex_area.movie_generator.sim_movie import BufferMovieSim, CachedPSF
 
 from simulator.background import BUFFER_MOVIES, gen_random_mov_stack
-from simulator.constants import RATIOMETRIC_RESCALE
+from simulator.constants import DEFAULT_NAVG, OPTIMUM_EVENT_DENSITY, RATIOMETRIC_RESCALE
 from simulator.events import gen_doped_events
 from simulator.ground_truth import gen_ground_truth
 from simulator.ratiometric import gen_ratiometric_movie
@@ -20,35 +20,53 @@ PSF_PATH = (
 _raw_psf = utils.load_from_pickle(PSF_PATH)
 
 
-def expPSF(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def exp_psf(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Evaluate the experimental PSF at arbitrary (x, y) coordinates.
 
     Thin wrapper around the raw RectBivariateSpline interpolator that fixes
-    ``grid=False`` so callers can pass flat coordinate arrays directly.
+    `grid=False` so callers can pass flat coordinate arrays directly.
 
-    Parameters
-    ----------
-    x, y :
-        Coordinate arrays in pixel units, as returned by
-        ``CachedPSF._gen_offset_mgrid``.
+    Args:
+        x: Coordinate array, in px, as returned by
+            `CachedPSF._gen_offset_mgrid`.
+        y: Coordinate array, in px, as returned by
+            `CachedPSF._gen_offset_mgrid`.
 
-    Returns
-    -------
-    np.ndarray
-        PSF amplitude at each coordinate pair.
+    Returns:
+        PSF amplitude at each (x, y) coordinate pair.
     """
     return _raw_psf(x, y, grid=False)
 
 
-ePSF = CachedPSF(expPSF, l_thum=21)
-movie_simulator = BufferMovieSim(psf_model=ePSF)
+psf_model = CachedPSF(exp_psf, l_thum=21)
+movie_simulator = BufferMovieSim(psf_model=psf_model)
 
 calib = BUFFER_MOVIES[0].calibration
-c2m = lambda c: np.divide(np.subtract(c, calib["intercept"]), calib["c2kDa"])
-m2c = lambda m: np.add(np.multiply(m, calib["c2kDa"]), calib["intercept"])
 
-OPTIMUM_EVENT_DENSITY: float = 0.5
-DEFAULT_NAVG: int = 5
+
+def c2m(contrast: np.ndarray) -> np.ndarray:
+    """Convert contrast to mass, in kDa, via the primary buffer movie's calibration.
+
+    Args:
+        contrast: Contrast value(s).
+
+    Returns:
+        Mass, in kDa.
+    """
+    return np.divide(np.subtract(contrast, calib["intercept"]), calib["c2kDa"])
+
+
+def m2c(mass: np.ndarray) -> np.ndarray:
+    """Convert mass, in kDa, to contrast, via the primary buffer movie's calibration.
+
+    Args:
+        mass: Mass, in kDa.
+
+    Returns:
+        Contrast value(s).
+    """
+    return np.add(np.multiply(mass, calib["c2kDa"]), calib["intercept"])
+
 
 event_generator = partial(
     gen_doped_events,

@@ -6,3 +6,5 @@ FRAMES_PER_SECOND: float = 42.7  # acquisition frame rate (Hz)
 HEATMAP_GAUSSIAN_SIGMA_PX: float = 1.0  # stdev of the ground truth heatmap gaussian, in px
 HEATMAP_GAUSSIAN_THUMBNAIL_SIZE: int = 9  # px window the gaussian is truncated to (must fit within BORDER_MASK)
 RATIOMETRIC_RESCALE: float = 2000.0  # approximates dividing by the empirical ratiometric noise stdev (sigma_noise)
+OPTIMUM_EVENT_DENSITY: float = 0.5  # events / um^2 / s, the center of gen_data's default sampling range
+DEFAULT_NAVG: int = 5  # default ratiometric window size (see ratiometric.gen_ratiometric_movie)

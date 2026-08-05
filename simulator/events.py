@@ -8,6 +8,14 @@ import numpy as np
 
 from simulator.constants import BORDER_MASK, FRAMES_PER_SECOND, NM_PER_PX
 
+# Movement events are sampled in three distance tiers rather than uniformly
+# across `distance_range`, biasing toward the short, often sub-pixel hops
+# real single-molecule movements tend to produce.
+_MOVEMENT_SMALL_DISTANCE_FRACTION: float = 0.6
+_MOVEMENT_MEDIUM_DISTANCE_FRACTION: float = 0.3
+_MOVEMENT_SMALL_DISTANCE_MAX_NM: float = 20.0
+_MOVEMENT_MEDIUM_DISTANCE_MAX_NM: float = 100.0
+
 
 def density_to_n_events(
     density: float,
@@ -166,10 +174,23 @@ def gen_events(
         The generated events, in no particular order.
 
     Raises:
-        ValueError: If `event_type_weight` doesn't have exactly 3 elements.
+        ValueError: If `event_type_weight` doesn't have exactly 3 elements,
+            if `mov_shape`'s time axis is too short to leave any frames
+            outside the `navg` exclusion zone, or if its spatial axes are
+            too short to leave any placement area outside `BORDER_MASK`.
     """
     if len(event_type_weight) != 3:
         raise ValueError("length of weights must be equal to no. of event types")
+    if mov_shape[0] <= 2 * navg:
+        raise ValueError(
+            f"mov_shape[0] ({mov_shape[0]}) must exceed 2 * navg ({2 * navg}) "
+            "to leave any frames outside the ratiometric exclusion zone"
+        )
+    if mov_shape[1] <= 2 * BORDER_MASK or mov_shape[2] <= 2 * BORDER_MASK:
+        raise ValueError(
+            f"mov_shape[1:] {mov_shape[1:]} must exceed 2 * BORDER_MASK "
+            f"({2 * BORDER_MASK}) in each spatial dimension"
+        )
 
     weights = np.array(event_type_weight) / np.sum(event_type_weight)
 
@@ -210,8 +231,8 @@ def gen_events(
         )
     ]
 
-    n_small_movements = int(0.6 * n_movements)
-    n_medium_movements = int(0.3 * n_movements)
+    n_small_movements = int(_MOVEMENT_SMALL_DISTANCE_FRACTION * n_movements)
+    n_medium_movements = int(_MOVEMENT_MEDIUM_DISTANCE_FRACTION * n_movements)
     n_large_movements = n_movements - n_small_movements - n_medium_movements
 
     movement_evs = [
@@ -223,9 +244,17 @@ def gen_events(
             np.random.uniform(contrast_range[0], contrast_range[1], n_movements),
             np.concatenate(
                 [
-                    np.random.uniform(distance_range[0], 20.0, n_small_movements),
-                    np.random.uniform(20.0, 100.0, n_medium_movements),
-                    np.random.uniform(100.0, distance_range[1], n_large_movements),
+                    np.random.uniform(
+                        distance_range[0], _MOVEMENT_SMALL_DISTANCE_MAX_NM, n_small_movements
+                    ),
+                    np.random.uniform(
+                        _MOVEMENT_SMALL_DISTANCE_MAX_NM,
+                        _MOVEMENT_MEDIUM_DISTANCE_MAX_NM,
+                        n_medium_movements,
+                    ),
+                    np.random.uniform(
+                        _MOVEMENT_MEDIUM_DISTANCE_MAX_NM, distance_range[1], n_large_movements
+                    ),
                 ]
             ),
             np.random.uniform(0, 2 * np.pi, n_movements),
