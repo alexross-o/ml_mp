@@ -150,6 +150,7 @@ def gen_events(
     distance_range: tuple[float, float] = (1.5, 300),
     event_type_weight: tuple[float, float, float] = (1, 1, 1),
     navg: int = 5,
+    rng: np.random.Generator | None = None,
 ) -> Sequence[AbstractSimEvent]:
     """Sample a batch of random binding, unbinding, and movement events.
 
@@ -169,6 +170,8 @@ def gen_events(
             Events are never placed in the first/last `navg` frames, since
             those have no valid ratiometric value -- avoiding any need to
             handle them downstream.
+        rng: Random generator to sample from. Defaults to a fresh, unseeded
+            `np.random.default_rng()` if not given.
 
     Returns:
         The generated events, in no particular order.
@@ -181,6 +184,7 @@ def gen_events(
     """
     if len(event_type_weight) != 3:
         raise ValueError("length of weights must be equal to no. of event types")
+    rng = np.random.default_rng(rng)
     if mov_shape[0] <= 2 * navg:
         raise ValueError(
             f"mov_shape[0] ({mov_shape[0]}) must exceed 2 * navg ({2 * navg}) "
@@ -215,19 +219,19 @@ def gen_events(
     binding_evs = [
         BindingSimEvent(x=x, y=y, i=i, c=c)
         for x, y, i, c in zip(
-            np.random.uniform(x_low, x_high, n_bindings),
-            np.random.uniform(y_low, y_high, n_bindings),
-            np.random.uniform(i_low, i_high, n_bindings),
-            np.random.uniform(contrast_range[0], contrast_range[1], n_bindings),
+            rng.uniform(x_low, x_high, n_bindings),
+            rng.uniform(y_low, y_high, n_bindings),
+            rng.uniform(i_low, i_high, n_bindings),
+            rng.uniform(contrast_range[0], contrast_range[1], n_bindings),
         )
     ]
     unbinding_evs = [
         UnbindingSimEvent(x=x, y=y, i=i, c=c)
         for x, y, i, c in zip(
-            np.random.uniform(x_low, x_high, n_unbindings),
-            np.random.uniform(y_low, y_high, n_unbindings),
-            np.random.uniform(i_low, i_high, n_unbindings),
-            -np.random.uniform(contrast_range[0], contrast_range[1], n_unbindings),
+            rng.uniform(x_low, x_high, n_unbindings),
+            rng.uniform(y_low, y_high, n_unbindings),
+            rng.uniform(i_low, i_high, n_unbindings),
+            -rng.uniform(contrast_range[0], contrast_range[1], n_unbindings),
         )
     ]
 
@@ -238,26 +242,26 @@ def gen_events(
     movement_evs = [
         MovementSimEvent(x=x, y=y, i=i, c=c, distance=distance / NM_PER_PX, theta=theta)
         for x, y, i, c, distance, theta in zip(
-            np.random.uniform(x_low, x_high, n_movements),
-            np.random.uniform(y_low, y_high, n_movements),
-            np.random.uniform(i_low, i_high, n_movements),
-            np.random.uniform(contrast_range[0], contrast_range[1], n_movements),
+            rng.uniform(x_low, x_high, n_movements),
+            rng.uniform(y_low, y_high, n_movements),
+            rng.uniform(i_low, i_high, n_movements),
+            rng.uniform(contrast_range[0], contrast_range[1], n_movements),
             np.concatenate(
                 [
-                    np.random.uniform(
+                    rng.uniform(
                         distance_range[0], _MOVEMENT_SMALL_DISTANCE_MAX_NM, n_small_movements
                     ),
-                    np.random.uniform(
+                    rng.uniform(
                         _MOVEMENT_SMALL_DISTANCE_MAX_NM,
                         _MOVEMENT_MEDIUM_DISTANCE_MAX_NM,
                         n_medium_movements,
                     ),
-                    np.random.uniform(
+                    rng.uniform(
                         _MOVEMENT_MEDIUM_DISTANCE_MAX_NM, distance_range[1], n_large_movements
                     ),
                 ]
             ),
-            np.random.uniform(0, 2 * np.pi, n_movements),
+            rng.uniform(0, 2 * np.pi, n_movements),
         )
     ]
 
@@ -273,6 +277,7 @@ def gen_doped_events(
     event_type_weight: tuple[float, float, float] = (1, 1, 1),
     dopant_density_fraction: float = 0.2,
     navg: int = 5,
+    rng: np.random.Generator | None = None,
 ) -> Sequence[AbstractSimEvent]:
     """Wraps `gen_events`, adding binding/unbinding-only "dopant" events at
     `dopant_contrast_range` so the model also sees events outside the
@@ -287,6 +292,7 @@ def gen_doped_events(
     Returns:
         The primary and dopant events combined, in no particular order.
     """
+    rng = np.random.default_rng(rng)
     events = gen_events(
         event_density=event_density,
         mov_shape=mov_shape,
@@ -294,6 +300,7 @@ def gen_doped_events(
         distance_range=distance_range,
         event_type_weight=event_type_weight,
         navg=navg,
+        rng=rng,
     )
     dopant_events = gen_events(
         event_density=dopant_density_fraction * event_density,
@@ -302,6 +309,7 @@ def gen_doped_events(
         distance_range=distance_range,
         event_type_weight=(1, 1, 0),
         navg=navg,
+        rng=rng,
     )
 
     return events + dopant_events

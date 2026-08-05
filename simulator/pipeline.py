@@ -68,8 +68,11 @@ def m2c(mass: np.ndarray) -> np.ndarray:
 
 event_generator = partial(
     gen_doped_events,
-    contrast_range=(m2c(2000), m2c(6000)),
-    dopant_contrast_range=(m2c(30), m2c(2000)),
+    # sorted since a negative calibration slope (as here) makes m2c decreasing
+    # in mass, and Generator.uniform (unlike legacy np.random.uniform) raises
+    # if low > high
+    contrast_range=tuple(sorted((m2c(2000), m2c(6000)))),
+    dopant_contrast_range=tuple(sorted((m2c(30), m2c(2000)))),
 )
 
 
@@ -83,6 +86,7 @@ def gen_data(
     ),
     navg: int = DEFAULT_NAVG,
     ratiometric_rescale: float = RATIOMETRIC_RESCALE,
+    seed: int | np.random.Generator | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Generate a batch of training-ready ratiometric movies and ground truth.
 
@@ -107,6 +111,9 @@ def gen_data(
             from event placement at each end of the movie (see `gen_events`).
         ratiometric_rescale: Scalar the ratiometric movie is multiplied by
             before batching (see `simulator.constants.RATIOMETRIC_RESCALE`).
+        seed: Seed (or an existing `np.random.Generator`, reused as-is) for
+            all randomness in this call -- the same seed reproduces the same
+            batch. Defaults to fresh, unseeded randomness if not given.
 
     Returns:
         A tuple of:
@@ -117,19 +124,21 @@ def gen_data(
               T - 2*navg, H, W) -- matching `EventDetector.forward`'s
               `predictions` up to the batch dimension.
     """
+    rng = np.random.default_rng(seed)
+
     movies = []
     heatmaps = []
     offsets = []
     orientations = []
 
     for _ in range(batch_size):
-        event_density = np.random.uniform(*event_density_range)
+        event_density = rng.uniform(*event_density_range)
         mov_stack = gen_random_mov_stack(
-            length=length, mov_thumbnail_size=mov_thumbnail_size
+            length=length, mov_thumbnail_size=mov_thumbnail_size, rng=rng
         )
 
         events = event_generator(
-            event_density=event_density, mov_shape=mov_stack.shape, navg=navg
+            event_density=event_density, mov_shape=mov_stack.shape, navg=navg, rng=rng
         )
         simple_events = [record for event in events for record in event.to_simple()]
 

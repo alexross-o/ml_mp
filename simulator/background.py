@@ -14,7 +14,11 @@ BUFFER_MOVIES = [
 ]  # crop all buffer movies to a common (Y, X) footprint
 
 
-def gen_random_mov_stack(length: int = 500, mov_thumbnail_size: int = 64) -> BufferMovie:
+def gen_random_mov_stack(
+    length: int = 500,
+    mov_thumbnail_size: int = 64,
+    rng: np.random.Generator | None = None,
+) -> BufferMovie:
     """Sample a random spatiotemporal crop from a randomly chosen buffer movie.
 
     Selects one of `BUFFER_MOVIES` at random, then crops it to a
@@ -26,12 +30,16 @@ def gen_random_mov_stack(length: int = 500, mov_thumbnail_size: int = 64) -> Buf
         length: Number of frames to crop from the movie's time axis.
         mov_thumbnail_size: Width and height, in px, of the cropped spatial
             window.
+        rng: Random generator to sample from. Defaults to a fresh, unseeded
+            `np.random.default_rng()` if not given.
 
     Returns:
         The cropped buffer movie, shape (length, mov_thumbnail_size,
         mov_thumbnail_size).
     """
-    rand_index = np.random.randint(0, len(BUFFER_MOVIES))
+    rng = np.random.default_rng(rng)
+
+    rand_index = rng.integers(0, len(BUFFER_MOVIES))
     mov: BufferMovie = BUFFER_MOVIES[rand_index]
 
     x_width = mov_thumbnail_size
@@ -41,9 +49,9 @@ def gen_random_mov_stack(length: int = 500, mov_thumbnail_size: int = 64) -> Buf
     y_max = B_MOV_Y_MAX - y_width
     t_max = mov.shape[0] - length
 
-    y_rand = np.random.randint(0, y_max + 1)
-    x_rand = np.random.randint(0, x_max + 1)
-    t_rand = np.random.randint(0, t_max + 1)
+    y_rand = rng.integers(0, y_max + 1)
+    x_rand = rng.integers(0, x_max + 1)
+    t_rand = rng.integers(0, t_max + 1)
 
     return mov[
         t_rand : t_rand + length, y_rand : y_rand + y_width, x_rand : x_rand + x_width
