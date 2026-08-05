@@ -81,17 +81,31 @@ class EventDetector(nn.Module):
             bias=True,
         )
 
-        # TODO: adjust to real class frequencies once data is simulated
-        # # per-class bias init — don't assume black lobe, white lobe, and dipole
-        # # occur at the same rate. Set pi per channel from your simulator's actual
-        # # class frequencies rather than broadcasting one scalar to all 3.
-        # pi = torch.tensor([0.01, 0.01, 0.005])   # example: dipoles rarer than singles
-        # bias_init = -torch.log((1 - pi) / pi)
-        # with torch.no_grad():
-        #     self.heatmap_head.temporal_conv.bias.copy_(bias_init)
+        # Per-class bias init (RetinaNet/CornerNet-style): near-zero weights
+        # make a fresh conv output sigmoid(bias) everywhere, so setting bias
+        # to the true class prior starts the network close to correct almost
+        # everywhere instead of an overconfident 50/50 guess at every voxel.
+        # pi derived from simulator.event_generator at OPTIMUM_EVENT_DENSITY
+        # (0.5 events/um^2/s) on a (500, 64, 64) movie, cropped to (490, 64,
+        # 64) by gen_data's navg=5 dead-zone crop: 37 binding, 37 unbinding,
+        # 29 movement events, out of 2,007,040 voxels/channel.
+        pi = torch.tensor([37 / 2_007_040, 37 / 2_007_040, 29 / 2_007_040])
+        bias_init = -torch.log((1 - pi) / pi)
+        with torch.no_grad():
+            self.heatmap_head.temporal_conv.bias.copy_(bias_init)
 
-        # nn.init.zeros_(self.offset_head.temporal_conv.weight)
-        # nn.init.zeros_(self.offset_head.temporal_conv.bias)
+        # offset/orientation targets are both symmetric about zero (offsets
+        # are sub-pixel-uniform, movement angles are uniform over
+        # [0, 2*pi)), so the origin is the MSE-optimal constant prediction
+        # for either — start there instead of an arbitrary random direction.
+        # For orientation this also avoids feeding functional.normalize a
+        # small-but-nonzero vector, which is where its 1/||x|| gradient is
+        # worst-conditioned; an exact-zero input lands cleanly on its
+        # eps-clamped branch instead.
+        nn.init.zeros_(self.offset_head.temporal_conv.weight)
+        nn.init.zeros_(self.offset_head.temporal_conv.bias)
+        nn.init.zeros_(self.orientation_head.temporal_conv.weight)
+        nn.init.zeros_(self.orientation_head.temporal_conv.bias)
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         """Run the backbone and all three detection heads.
