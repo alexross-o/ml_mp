@@ -1,6 +1,7 @@
 """PSF/instrument setup, mass calibration, and the end-to-end gen_data() pipeline."""
 
 from functools import partial
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -13,11 +14,8 @@ from simulator.events import gen_doped_events
 from simulator.ground_truth import gen_ground_truth
 from simulator.ratiometric import gen_ratiometric_movie
 
-PSF_PATH = (
-    r"C:\Users\chem-bras5436\Documents\MP_DATA\citrate_synthase\TwoMP"
-    r"\buffer_movies\unbinned\011_20241115_s_elo_wt_his_tag_7500x_expPSF.pickle"
-)
-_raw_psf = utils.load_from_pickle(PSF_PATH)
+PSF_PATH = Path(__file__).parent / "011_20241115_s_elo_wt_his_tag_7500x_expPSF.pickle"
+_raw_psf = utils.load_from_pickle(str(PSF_PATH))
 
 
 def exp_psf(x: np.ndarray, y: np.ndarray) -> np.ndarray:
