@@ -18,20 +18,32 @@ class EventDetector(nn.Module):
     CLASS_UNBINDING: int = 1
     CLASS_MOVEMENT: int = 2
 
-    def __init__(self, backbone: CustomUNet, feat_channels: int) -> None:
+    def __init__(
+        self,
+        n_channels: int = 1,
+        feat_channels: int = 3,
+        min_channels: int = 8,
+        trilinear: bool = False,
+    ) -> None:
         """Initialize the event detector.
 
         Args:
-            backbone: Feature-extracting `CustomUNet` producing `feat_channels`
-                channels of output.
+            n_channels: Number of input channels.
             feat_channels: Number of channels in the backbone's output, i.e.
                 `backbone.n_classes`.
+            min_channels: Minimum number of channels in the backbone.
+            trilinear: Whether to use trilinear interpolation for upsampling.
 
         Raises:
             ValueError: If `feat_channels` doesn't match `backbone.n_classes`.
         """
         super().__init__()
-        self.backbone = backbone
+        self.backbone = CustomUNet(
+            n_channels=n_channels,
+            n_classes=feat_channels,
+            min_channels=min_channels,
+            trilinear=trilinear,
+        )
 
         if feat_channels != self.backbone.n_classes:
             raise ValueError(
