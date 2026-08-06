@@ -125,7 +125,7 @@ def loss_fn(
     alpha_heatmap: float = 2.0,
     beta_heatmap: float = 4.0,
     lambda_offset: float = 1.0,
-    lambda_orientation: float = 1.0,
+    lambda_orientation: float = 0.8,
     offset_loss_fn: _Loss = DEFAULT_NON_HEATMAP_LOSS,
     orientation_loss_fn: _Loss = DEFAULT_NON_HEATMAP_LOSS,
     movement_channel: int = EventDetector.CLASS_MOVEMENT,
