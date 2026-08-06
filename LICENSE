@@ -6,7 +6,7 @@ Without limiting other conditions in the License, the grant of rights under the 
 
 For purposes of the foregoing, “Sell” means practicing any or all of the rights granted to you under the License to provide to third parties, for a fee or other consideration (including without limitation fees for hosting or consulting/ support services related to the Software), a product or service whose value derives, entirely or substantially, from the functionality of the Software. Any license notice or attribution required by the License must also include this Commons Clause License Condition notice.
 
-Software: KD Fitting
+Software: ml_mp
 
 License: GNU Affero General Public License v3.0
 
@@ -644,7 +644,7 @@ to attach them to the start of each source file to most effectively
 state the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
-    ml_mp_movements - a repo to detect and fit movements from mass photometry data
+    ml_mp - a repo to detect and fit events using machine learning from mass photometry data
     Copyright (C) 2026  alexross-o
 
     This program is free software: you can redistribute it and/or modify
