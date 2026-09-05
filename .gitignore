@@ -35,3 +35,4 @@ Thumbs.db
 # Data directory
 data/
 *.onnx*
+*ted_hrlr_translate_pt_en_converter*
