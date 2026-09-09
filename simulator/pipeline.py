@@ -6,15 +6,14 @@ from pathlib import Path
 import numpy as np
 import torch
 from alex_area import utils
-from alex_area.movie_generator.sim_movie import BufferMovieSim, CachedPSF
-
+from rust_mp_simulator import ExperimentalSimulator
 from simulator.background import BUFFER_MOVIES, gen_random_mov_stack
 from simulator.constants import DEFAULT_NAVG, OPTIMUM_EVENT_DENSITY, RATIOMETRIC_RESCALE
 from simulator.events import gen_doped_events
 from simulator.ground_truth import gen_ground_truth
 from simulator.ratiometric import gen_ratiometric_movie
 
-PSF_PATH = Path(__file__).parent / "011_20241115_s_elo_wt_his_tag_7500x_expPSF.pickle"
+PSF_PATH = Path(__file__).parent / "002_20260423_ms1000_mfp2_exp_PSF.pickle"
 _raw_psf = utils.load_from_pickle(str(PSF_PATH))
 
 
@@ -36,8 +35,8 @@ def exp_psf(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return _raw_psf(x, y, grid=False)
 
 
-psf_model = CachedPSF(exp_psf, l_thum=21)
-movie_simulator = BufferMovieSim(psf_model=psf_model)
+tx, ty, c = _raw_psf.tck
+movie_simulator = ExperimentalSimulator(tx=tx, ty=ty, c=c, kx=3, ky=3, l_thum=21, scatter_interference_destructive=False)
 
 calib = BUFFER_MOVIES[0].calibration
 
@@ -152,7 +151,7 @@ def gen_data(
         simple_events = [record for event in events for record in event.to_simple()]
 
         ground_truth = gen_ground_truth(events=events, mov_shape=mov_stack.shape)
-        sim_movie = movie_simulator.work(movie=mov_stack, events=simple_events)
+        events_added, sim_movie = movie_simulator.simulate(movie=mov_stack, events=simple_events)
         ratiometric = gen_ratiometric_movie(sim_movie, navg=navg) * ratiometric_rescale
         ratiometric = ratiometric[navg:-navg]  # drop the NaN dead zone
 
