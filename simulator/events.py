@@ -119,9 +119,7 @@ class MovementSimEvent(BaseSimEvent):
     theta: float
 
     def __post_init__(self) -> None:
-        self.theta = (self.theta / (2 * np.pi)) - np.floor(
-            self.theta / (2 * np.pi)
-        )  # wrap to [0, 2*pi)
+        self.theta = np.mod(self.theta, 2 * np.pi)  # wrap to [0, 2*pi)
 
         self.dx: float = self.distance * np.cos(self.theta)
         self.dy: float = self.distance * np.sin(self.theta)
