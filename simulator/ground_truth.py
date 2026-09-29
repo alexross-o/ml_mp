@@ -5,14 +5,8 @@ from typing import Sequence
 import numpy as np
 import torch
 
-from model.model import EventDetector
 from simulator.constants import HEATMAP_GAUSSIAN_SIGMA_PX, HEATMAP_GAUSSIAN_THUMBNAIL_SIZE
-from simulator.events import (
-    AbstractSimEvent,
-    BindingSimEvent,
-    MovementSimEvent,
-    UnbindingSimEvent,
-)
+from simulator.events import EVENT_TYPES, AbstractSimEvent
 
 
 def gen_ground_truth(
@@ -23,13 +17,15 @@ def gen_ground_truth(
     """Render simulated events into ground truth compatible with `loss_fn`.
 
     For each event, adds a small Gaussian thumbnail (peak 1, truncated to
-    `HEATMAP_GAUSSIAN_THUMBNAIL_SIZE` px) onto its class's heatmap centered
+    `HEATMAP_GAUSSIAN_THUMBNAIL_SIZE` px) onto its type's heatmap channel
+    (`type(event).class_index`, see `simulator.events.EVENT_TYPES`) centered
     at (frame, hot_px) -- the CornerNet/CenterNet-style target
     `loss_fn_heatmap` expects -- and records its sub-pixel (dy, dx) offset at
-    that same peak voxel. Movement events additionally record their (cos,
-    sin) orientation there. Overlapping events of the same class are summed,
-    then the heatmap is clipped to [0, 1] so nearby peaks still saturate to
-    1 rather than exceeding it.
+    that same peak voxel. Events whose type carries an orientation
+    (`event.orientation is not None`, e.g. movement) additionally record
+    their (cos, sin) orientation there. Overlapping events of the same
+    class are summed, then the heatmap is clipped to [0, 1] so nearby peaks
+    still saturate to 1 rather than exceeding it.
 
     Args:
         events: Simulated events, as returned by `gen_events`.
@@ -37,17 +33,17 @@ def gen_ground_truth(
         sigma_px: Standard deviation, in px, of the heatmap Gaussian.
 
     Returns:
-        Dict with keys "heatmap" (3, T, H, W), "offset" (2, T, H, W), and
-        "orientation" (2, T, H, W) -- matching `predictions` from
-        `EventDetector.forward` up to the batch dimension.
+        Dict with keys "heatmap" (len(EVENT_TYPES), T, H, W), "offset"
+        (2, T, H, W), and "orientation" (2, T, H, W) -- matching
+        `predictions` from `EventDetector.forward` up to the batch dimension.
 
     Raises:
-        TypeError: If `events` contains a type other than `BindingSimEvent`,
-            `UnbindingSimEvent`, or `MovementSimEvent`.
+        TypeError: If `events` contains a type that isn't a registered
+            `simulator.events.EVENT_TYPES` entry.
     """
     t_size, h_size, w_size = mov_shape
 
-    heatmap = np.zeros((3, t_size, h_size, w_size), dtype=np.float32)
+    heatmap = np.zeros((len(EVENT_TYPES), t_size, h_size, w_size), dtype=np.float32)
     offset = np.zeros((2, t_size, h_size, w_size), dtype=np.float32)
     orientation = np.zeros((2, t_size, h_size, w_size), dtype=np.float32)
 
@@ -56,14 +52,10 @@ def gen_ground_truth(
     gaussian_patch = np.exp(-(patch_xx**2 + patch_yy**2) / (2 * sigma_px**2))
 
     for event in events:
-        if isinstance(event, BindingSimEvent):
-            channel = EventDetector.CLASS_BINDING
-        elif isinstance(event, UnbindingSimEvent):
-            channel = EventDetector.CLASS_UNBINDING
-        elif isinstance(event, MovementSimEvent):
-            channel = EventDetector.CLASS_MOVEMENT
-        else:
-            raise TypeError(f"unrecognized event type: {type(event).__name__}")
+        event_type = type(event)
+        if event_type not in EVENT_TYPES:
+            raise TypeError(f"unrecognized event type: {event_type.__name__}")
+        channel = event_type.class_index
 
         frame = int(np.clip(np.round(event.i), 0, t_size - 1))
         x_px, y_px = event.hot_px
@@ -84,8 +76,8 @@ def gen_ground_truth(
         # enough not to be worth tracking/averaging.
         offset[:, frame, y_px, x_px] = (dy, dx)
 
-        if isinstance(event, MovementSimEvent):
-            orientation[:, frame, y_px, x_px] = (np.cos(event.theta), np.sin(event.theta))
+        if (orient := event.orientation) is not None:
+            orientation[:, frame, y_px, x_px] = orient
 
     heatmap = np.clip(heatmap, 0.0, 1.0)
 
