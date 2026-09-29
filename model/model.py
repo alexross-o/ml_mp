@@ -1,6 +1,10 @@
+from typing import Sequence
+
 import torch
 import torch.nn as nn
 from torch.nn import functional
+
+from simulator.events import EVENT_TYPES, BindingSimEvent, MovementSimEvent, UnbindingSimEvent
 
 from .custom_unet import CustomUNet
 from .unet_parts import Conv2Plus1D
@@ -9,14 +13,18 @@ from .unet_parts import Conv2Plus1D
 class EventDetector(nn.Module):
     """Per-pixel event detection head on top of a `CustomUNet` backbone.
 
-    Predicts, at every spatiotemporal location: a per-class binding/unbinding/
-    movement heatmap, a sub-pixel (dy, dx) centering offset, and a dipole
-    orientation encoded as a unit vector.
+    Predicts, at every spatiotemporal location: a per-class heatmap (one
+    channel per registered event type, see `simulator.events.EVENT_TYPES`),
+    a sub-pixel (dy, dx) centering offset, and a dipole orientation encoded
+    as a unit vector.
     """
 
-    CLASS_BINDING: int = 0
-    CLASS_UNBINDING: int = 1
-    CLASS_MOVEMENT: int = 2
+    # Aliases onto today's registered event types, kept for convenience/
+    # backward compatibility -- a newly registered type doesn't get one of
+    # these unless explicitly added.
+    CLASS_BINDING: int = BindingSimEvent.class_index
+    CLASS_UNBINDING: int = UnbindingSimEvent.class_index
+    CLASS_MOVEMENT: int = MovementSimEvent.class_index
 
     def __init__(
         self,
@@ -24,6 +32,8 @@ class EventDetector(nn.Module):
         feat_channels: int = 3,
         min_channels: int = 8,
         trilinear: bool = False,
+        n_event_classes: int = len(EVENT_TYPES),
+        class_prior: Sequence[float] | None = None,
     ) -> None:
         """Initialize the event detector.
 
@@ -33,11 +43,24 @@ class EventDetector(nn.Module):
                 `backbone.n_classes`.
             min_channels: Minimum number of channels in the backbone.
             trilinear: Whether to use trilinear interpolation for upsampling.
+            n_event_classes: Number of heatmap output channels, one per
+                event class. Defaults to `len(EVENT_TYPES)`, i.e. every
+                currently registered event type.
+            class_prior: Per-class expected positive-voxel fraction, used
+                for `heatmap_head`'s bias init (see below); must have length
+                `n_event_classes`. Defaults to today's registered types'
+                empirical prior when `n_event_classes == len(EVENT_TYPES)`;
+                required explicitly otherwise, since there's no default
+                prior for a class mix other than today's.
 
         Raises:
-            ValueError: If `feat_channels` doesn't match `backbone.n_classes`.
+            ValueError: If `feat_channels` doesn't match `backbone.n_classes`,
+                if `class_prior` is omitted for a non-default
+                `n_event_classes`, or if `class_prior`'s length doesn't
+                match `n_event_classes`.
         """
         super().__init__()
+        self.n_event_classes = n_event_classes
         self.backbone = CustomUNet(
             n_channels=n_channels,
             n_classes=feat_channels,
@@ -51,17 +74,17 @@ class EventDetector(nn.Module):
                 f"({self.backbone.n_classes})"
             )
 
-        # 3 independent channels, one per class — sigmoid'd independently, not softmax
+        # one independent channel per event class — sigmoid'd independently, not softmax
         self.heatmap_head = Conv2Plus1D(
             in_channels=feat_channels,
             mid_channels=16,
-            out_channels=3,
+            out_channels=n_event_classes,
             temporal_kernel_size=1,
             temporal_padding=0,
             bias=True,
         )
 
-        # shared across all 3 classes — sub-pixel centering doesn't depend on class
+        # shared across all classes — sub-pixel centering doesn't depend on class
         self.offset_head = Conv2Plus1D(
             in_channels=feat_channels,
             mid_channels=16,
@@ -71,7 +94,8 @@ class EventDetector(nn.Module):
             bias=True,
         )
 
-        # computed everywhere, but only ever supervised/read at dipole locations
+        # computed everywhere, but only ever supervised/read at locations of
+        # classes with has_orientation = True (see EVENT_TYPES, model.loss.loss_fn)
         self.orientation_head = Conv2Plus1D(
             in_channels=feat_channels,
             mid_channels=16,
@@ -85,11 +109,26 @@ class EventDetector(nn.Module):
         # make a fresh conv output sigmoid(bias) everywhere, so setting bias
         # to the true class prior starts the network close to correct almost
         # everywhere instead of an overconfident 50/50 guess at every voxel.
-        # pi derived from simulator.event_generator at OPTIMUM_EVENT_DENSITY
-        # (0.5 events/um^2/s) on a (500, 64, 64) movie, cropped to (490, 64,
-        # 64) by gen_data's navg=5 dead-zone crop: 37 binding, 37 unbinding,
-        # 29 movement events, out of 2,007,040 voxels/channel.
-        pi = torch.tensor([37 / 2_007_040, 37 / 2_007_040, 29 / 2_007_040])
+        if class_prior is None:
+            if n_event_classes != len(EVENT_TYPES):
+                raise ValueError(
+                    "class_prior must be given explicitly when n_event_classes "
+                    f"({n_event_classes}) differs from len(EVENT_TYPES) "
+                    f"({len(EVENT_TYPES)}) -- there's no default prior for a "
+                    "class mix other than today's registered types"
+                )
+            # pi derived from simulator.event_generator at OPTIMUM_EVENT_DENSITY
+            # (0.5 events/um^2/s) on a (500, 64, 64) movie, cropped to (490, 64,
+            # 64) by gen_data's navg=5 dead-zone crop: 37 binding, 37 unbinding,
+            # 29 movement events, out of 2,007,040 voxels/channel.
+            class_prior = [37 / 2_007_040, 37 / 2_007_040, 29 / 2_007_040]
+        if len(class_prior) != n_event_classes:
+            raise ValueError(
+                f"class_prior must have length n_event_classes ({n_event_classes}), "
+                f"got {len(class_prior)}"
+            )
+
+        pi = torch.tensor(class_prior)
         bias_init = -torch.log((1 - pi) / pi)
         with torch.no_grad():
             self.heatmap_head.temporal_conv.bias.copy_(bias_init)
@@ -115,9 +154,9 @@ class EventDetector(nn.Module):
 
         Returns:
             Dict with keys:
-                "heatmap": Per-class logits, shape (N, 3, T, H, W). Apply a
-                    sigmoid per channel (not softmax) — classes aren't mutually
-                    exclusive.
+                "heatmap": Per-class logits, shape (N, n_event_classes, T, H,
+                    W). Apply a sigmoid per channel (not softmax) — classes
+                    aren't mutually exclusive.
                 "offset": Sub-pixel (dy, dx) centering offset, shape
                     (N, 2, T, H, W).
                 "orientation": Dipole orientation as a unit (cos, sin) vector,
