@@ -14,7 +14,7 @@ from simulator.events import (
 from .custom_unet import CustomUNet
 from .unet_parts import Conv2Plus1D
 
-DEFAULT_CLASS_PRIOR: float = 37 / 2_007_040
+DEFAULT_CLASS_PRIOR: float = 33 / 2_007_040
 
 
 class EventDetector(nn.Module):
@@ -55,16 +55,14 @@ class EventDetector(nn.Module):
                 currently registered event type.
             class_prior: Per-class expected positive-voxel fraction, used
                 for `heatmap_head`'s bias init (see below); must have length
-                `n_event_classes`. Defaults to today's registered types'
-                empirical prior when `n_event_classes == len(EVENT_TYPES)`;
-                required explicitly otherwise, since there's no default
-                prior for a class mix other than today's.
+                `n_event_classes`. Defaults to a uniform prior
+                (`DEFAULT_CLASS_PRIOR`) applied to every class -- a rough
+                order-of-magnitude approximation rather than exact per-class
+                counts, but one that works at any `n_event_classes`.
 
         Raises:
-            ValueError: If `feat_channels` doesn't match `backbone.n_classes`,
-                if `class_prior` is omitted for a non-default
-                `n_event_classes`, or if `class_prior`'s length doesn't
-                match `n_event_classes`.
+            ValueError: If `class_prior`'s length doesn't match
+                `n_event_classes`.
         """
         super().__init__()
         self.n_event_classes = n_event_classes
@@ -111,17 +109,14 @@ class EventDetector(nn.Module):
         # to the true class prior starts the network close to correct almost
         # everywhere instead of an overconfident 50/50 guess at every voxel.
         if class_prior is None:
-            if n_event_classes != len(EVENT_TYPES):
-                raise ValueError(
-                    "class_prior must be given explicitly when n_event_classes "
-                    f"({n_event_classes}) differs from len(EVENT_TYPES) "
-                    f"({len(EVENT_TYPES)}) -- there's no default prior for a "
-                    "class mix other than today's registered types"
-                )
-            # pi derived from simulator.event_generator at OPTIMUM_EVENT_DENSITY
-            # (0.5 events/um^2/s) on a (500, 64, 64) movie, cropped to (490, 64,
-            # 64) by gen_data's navg=5 dead-zone crop: 37 binding, 37 unbinding,
-            # 29 movement events, out of 2,007,040 voxels/channel.
+            # Uniform prior applied to every class -- an order-of-magnitude
+            # approximation that works at any n_event_classes, rather than
+            # exact per-class counts. DEFAULT_CLASS_PRIOR is derived from
+            # simulator.event_generator at OPTIMUM_EVENT_DENSITY (0.5
+            # events/um^2/s) on a (500, 64, 64) movie, cropped to (490, 64,
+            # 64) by gen_data's navg=5 dead-zone crop, where today's 3
+            # registered types see roughly 33 events each out of 2,007,040
+            # voxels/channel.
             class_prior = [DEFAULT_CLASS_PRIOR] * n_event_classes
         if len(class_prior) != n_event_classes:
             raise ValueError(
