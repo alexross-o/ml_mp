@@ -4,10 +4,17 @@ import torch
 import torch.nn as nn
 from torch.nn import functional
 
-from simulator.events import EVENT_TYPES, BindingSimEvent, MovementSimEvent, UnbindingSimEvent
+from simulator.events import (
+    EVENT_TYPES,
+    BindingSimEvent,
+    MovementSimEvent,
+    UnbindingSimEvent,
+)
 
 from .custom_unet import CustomUNet
 from .unet_parts import Conv2Plus1D
+
+DEFAULT_CLASS_PRIOR: float = 37 / 2_007_040
 
 
 class EventDetector(nn.Module):
@@ -68,12 +75,6 @@ class EventDetector(nn.Module):
             trilinear=trilinear,
         )
 
-        if feat_channels != self.backbone.n_classes:
-            raise ValueError(
-                f"feat_channels ({feat_channels}) must match backbone.n_classes "
-                f"({self.backbone.n_classes})"
-            )
-
         # one independent channel per event class — sigmoid'd independently, not softmax
         self.heatmap_head = Conv2Plus1D(
             in_channels=feat_channels,
@@ -121,7 +122,7 @@ class EventDetector(nn.Module):
             # (0.5 events/um^2/s) on a (500, 64, 64) movie, cropped to (490, 64,
             # 64) by gen_data's navg=5 dead-zone crop: 37 binding, 37 unbinding,
             # 29 movement events, out of 2,007,040 voxels/channel.
-            class_prior = [37 / 2_007_040, 37 / 2_007_040, 29 / 2_007_040]
+            class_prior = [DEFAULT_CLASS_PRIOR] * n_event_classes
         if len(class_prior) != n_event_classes:
             raise ValueError(
                 f"class_prior must have length n_event_classes ({n_event_classes}), "
