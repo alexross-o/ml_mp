@@ -124,7 +124,19 @@ EVENT_TYPES: list[type[AbstractSimEvent]] = []
 
 def register_event_type(cls: type[_T]) -> type[_T]:
     """Register a concrete `AbstractSimEvent` subclass in `EVENT_TYPES`,
-    stamping its `class_index` to its position in the registry."""
+    stamping its `class_index` to its position in the registry.
+
+    Raises:
+        ValueError: If `cls` is already registered, or another registered
+            type already uses the same `name`.
+    """
+    if cls in EVENT_TYPES:
+        raise ValueError(f"event type {cls.__name__} is already registered")
+    for existing in EVENT_TYPES:
+        if existing.name == cls.name:
+            raise ValueError(
+                f"event type name {cls.name!r} is already used by {existing.__name__}"
+            )
     cls.class_index = len(EVENT_TYPES)
     EVENT_TYPES.append(cls)
     return cls
