@@ -1,18 +1,15 @@
 """Regression test for the Step 3 registry refactor (model/model.py).
 
 Checks that EventDetector's default instantiation (n_event_classes derived
-from simulator.events.EVENT_TYPES) produces identical head shapes and
-bias-init values to the pre-refactor hardcoded-3-classes version, and that
-a non-default n_event_classes without an explicit class_prior is rejected.
-One-time migration safety net -- safe to delete once the refactor is
-trusted -- not a test of ongoing behavior (a future 4th event type is
-expected to change these numbers).
+from simulator.events.EVENT_TYPES) produces the expected head shapes and
+bias-init values, and that the uniform DEFAULT_CLASS_PRIOR fallback works
+at any n_event_classes without requiring an explicit class_prior.
 """
 
 import pytest
 import torch
 
-from model.model import EventDetector
+from model.model import DEFAULT_CLASS_PRIOR, EventDetector
 from simulator.events import EVENT_TYPES
 
 
@@ -29,11 +26,11 @@ def test_default_head_shapes_match_legacy():
     assert model.orientation_head.temporal_conv.out_channels == 2
 
 
-def test_default_bias_init_matches_legacy_values():
+def test_default_bias_init_uses_uniform_prior():
     model = EventDetector()
-    legacy_pi = torch.tensor([37 / 2_007_040, 37 / 2_007_040, 29 / 2_007_040])
-    legacy_bias = -torch.log((1 - legacy_pi) / legacy_pi)
-    assert torch.equal(model.heatmap_head.temporal_conv.bias.detach(), legacy_bias)
+    expected_pi = torch.tensor([DEFAULT_CLASS_PRIOR] * len(EVENT_TYPES))
+    expected_bias = -torch.log((1 - expected_pi) / expected_pi)
+    assert torch.equal(model.heatmap_head.temporal_conv.bias.detach(), expected_bias)
 
 
 def test_forward_pass_shapes():
@@ -47,12 +44,15 @@ def test_forward_pass_shapes():
     assert out["orientation"].shape == (1, 2, 8, 64, 64)
 
 
-def test_non_default_n_event_classes_requires_class_prior():
-    with pytest.raises(ValueError):
-        EventDetector(n_event_classes=4)
+def test_non_default_n_event_classes_uses_uniform_prior_by_default():
+    model = EventDetector(n_event_classes=4)
+    assert model.heatmap_head.temporal_conv.out_channels == 4
+    expected_pi = torch.tensor([DEFAULT_CLASS_PRIOR] * 4)
+    expected_bias = -torch.log((1 - expected_pi) / expected_pi)
+    assert torch.equal(model.heatmap_head.temporal_conv.bias.detach(), expected_bias)
 
 
-def test_non_default_n_event_classes_with_class_prior_works():
+def test_non_default_n_event_classes_with_explicit_class_prior_works():
     model = EventDetector(n_event_classes=4, class_prior=[0.1, 0.1, 0.1, 0.1])
     assert model.heatmap_head.temporal_conv.out_channels == 4
 
