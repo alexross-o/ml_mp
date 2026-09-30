@@ -124,10 +124,11 @@ def gen_data(
     Returns:
         A tuple of:
             - Ratiometric movies, shape (batch_size, 1, T - 2*navg, H, W).
-            - Ground truth dict with keys "heatmap" (batch_size, 3,
-              T - 2*navg, H, W), "offset" and "orientation" (batch_size, 2,
-              T - 2*navg, H, W) -- matching `EventDetector.forward`'s
-              `predictions` up to the batch dimension.
+            - Ground truth dict with keys "heatmap" (batch_size,
+              len(simulator.events.EVENT_TYPES), T - 2*navg, H, W),
+              "offset" and "orientation" (batch_size, 2, T - 2*navg, H, W)
+              -- matching `EventDetector.forward`'s `predictions` up to the
+              batch dimension.
     """
     rng = np.random.default_rng(seed)
 
