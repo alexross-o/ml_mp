@@ -1,12 +1,18 @@
 """Loss functions for the heatmap/offset/orientation event detection heads."""
 
+from typing import Sequence
+
 import torch
 import torch.nn as nn
 from torch.nn import functional
 from torch.nn.modules.loss import _Loss
-from .model import EventDetector
+
+from simulator.events import EVENT_TYPES
 
 DEFAULT_NON_HEATMAP_LOSS = nn.MSELoss(reduction="none")
+DEFAULT_ORIENTATION_CHANNELS: tuple[int, ...] = tuple(
+    event_type.class_index for event_type in EVENT_TYPES if event_type.has_orientation
+)
 
 
 def loss_fn_heatmap(
@@ -128,7 +134,7 @@ def loss_fn(
     lambda_orientation: float = 0.8,
     offset_loss_fn: _Loss = DEFAULT_NON_HEATMAP_LOSS,
     orientation_loss_fn: _Loss = DEFAULT_NON_HEATMAP_LOSS,
-    movement_channel: int = EventDetector.CLASS_MOVEMENT,
+    orientation_channels: Sequence[int] = DEFAULT_ORIENTATION_CHANNELS,
 ) -> torch.Tensor:
     """Combined loss for `EventDetector`'s heatmap, offset, and orientation heads.
 
@@ -144,9 +150,12 @@ def loss_fn(
             have `reduction="none"`.
         orientation_loss_fn: Elementwise loss module for the orientation
             head; must have `reduction="none"`.
-        movement_channel: Heatmap channel index corresponding to
-            `EventDetector.CLASS_MOVEMENT` (dipole events), used to mask the
-            orientation loss to voxels with a true movement event.
+        orientation_channels: Heatmap channel indices whose events carry an
+            orientation (see `simulator.events.EVENT_TYPES`'s
+            `has_orientation`), used to mask the orientation loss to voxels
+            with a true event of any of these classes. Defaults to every
+            currently registered orientation-bearing type (today: just
+            movement).
 
     Returns:
         Scalar combined loss: heatmap loss plus the weighted offset and
@@ -173,7 +182,7 @@ def loss_fn(
         predictions["offset"], ground_truth["offset"], offset_mask, offset_loss_fn
     )
 
-    orientation_mask = hm_mask[:, movement_channel : movement_channel + 1]
+    orientation_mask = hm_mask[:, list(orientation_channels)].any(dim=1, keepdim=True).float()
     loss_orientation = loss_fn_orientation(
         predictions["orientation"],
         ground_truth["orientation"],
