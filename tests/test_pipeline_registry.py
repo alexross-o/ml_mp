@@ -16,6 +16,6 @@ def test_gen_data_heatmap_channel_count_matches_registry():
 
     assert movies.shape[0] == 1
     assert ground_truth["heatmap"].shape[0] == 1
-    assert ground_truth["heatmap"].shape[1] == len(EVENT_TYPES) == 3
+    assert ground_truth["heatmap"].shape[1] == len(EVENT_TYPES)
     assert ground_truth["offset"].shape[1] == 2
     assert ground_truth["orientation"].shape[1] == 2
